@@ -269,10 +269,10 @@
   <section id="how" class="py-20 lg:py-28" style="background: var(--surface-2)">
     <div class="max-w-6xl mx-auto px-5 lg:px-8">
       <div class="max-w-2xl mb-14">
-        <div class="text-[11px] tracking-[0.2em] uppercase mb-3" style="font-family: 'DM Mono', monospace; color: var(--accent)">
+        <div class="text-[11px] tracking-[0.2em] uppercase mb-3" style="font-family: 'DM Mono', monospace; color: #4d7c0f">
           — How it works
         </div>
-        <h2 class="text-3xl lg:text-5xl font-extrabold tracking-tight" style="font-family: 'Syne', sans-serif; letter-spacing: -0.5px">
+        <h2 class="text-3xl lg:text-5xl font-extrabold tracking-tight" style="font-family: 'Syne', sans-serif; letter-spacing: -0.5px; color: var(--text)">
           Live in under five minutes.
         </h2>
       </div>
@@ -291,8 +291,8 @@
                 <span class="hidden md:block h-px flex-1" style="background: var(--border)"></span>
               {/if}
             </div>
-            <div class="text-base font-bold mb-1.5" style="font-family: 'Syne', sans-serif">{item.t}</div>
-            <div class="text-sm leading-relaxed" style="color: #5b5b78">{item.d}</div>
+            <div class="text-base font-bold mb-1.5" style="font-family: 'Syne', sans-serif; color: var(--text)">{item.t}</div>
+            <div class="text-sm leading-relaxed" style="color: #4a4a62">{item.d}</div>
           </div>
         {/each}
       </div>
