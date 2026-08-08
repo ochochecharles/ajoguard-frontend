@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/stores';
+  import { resolve } from '$app/paths';
 </script>
 
 <div class="min-h-screen flex items-center justify-center p-6"
@@ -34,7 +35,7 @@
       </button>
 
       <a
-        href="/"
+        href={resolve('/')}
         class="px-4 py-2.5 rounded-xl text-sm font-semibold no-underline"
         style="background: var(--ink); color: var(--accent)"
       >

@@ -1,37 +1,51 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { groups } from '$lib/api';
+  import { groups, type AuditEntry, type ChainVerification } from '$lib/api';
   import { getCollector } from '$lib/auth';
-  import { naira, fmtDate, shortId } from '$lib/utils';
+  import { nairaFromKobo, fmtDate, shortId } from '$lib/utils';
   import { addToast } from '$lib/stores/toast.store';
   import EmptyState from '$lib/components/EmptyState.svelte';
-
-  // ─── Types ───────────────────────────────────────────────
-
-  type AuditEntry  = Awaited<ReturnType<typeof groups.auditHistory>>[number];
-  type ChainResult = Awaited<ReturnType<typeof groups.verifyChain>>;
+  import Pagination from '$lib/components/Pagination.svelte';
 
   // ─── State ───────────────────────────────────────────────
 
-  let loading    = $state(true);
-  let verifying  = $state(false);
-  let entries    = $state<AuditEntry[]>([]);
-  let chainResult = $state<ChainResult | null>(null);
+  let loading     = $state(true);
+  let verifying   = $state(false);
+  let entries     = $state<AuditEntry[]>([]);
+  let page        = $state(1);
+  let totalPages  = $state(1);
+  let total       = $state(0);
+  let chainResult = $state<ChainVerification | null>(null);
 
   // ─── Load audit history ──────────────────────────────────
 
-  onMount(async () => {
+  async function loadHistory(): Promise<void> {
     const collector = getCollector();
     if (!collector) return;
 
     try {
-      entries = await groups.auditHistory(collector.groupId);
+      const res = await groups.auditHistory(collector.groupId, page, 50);
+      entries    = res.data;
+      page       = res.page;
+      totalPages = res.totalPages;
+      total      = res.total;
     } catch (error) {
       addToast((error as Error).message, 'error');
     } finally {
       loading = false;
     }
+  }
+
+  onMount(async () => {
+    loading = true;
+    await loadHistory();
   });
+
+  function changePage(next: number): void {
+    page = next;
+    loading = true;
+    loadHistory();
+  }
 
   // ─── Verify chain ────────────────────────────────────────
 
@@ -98,7 +112,7 @@
                style="border-color: var(--border); border-top-color: var(--accent)">
           </div>
           <p class="text-sm" style="color: var(--text-muted)">
-            Verifying {entries.length} entries...
+            Verifying chain...
           </p>
         </div>
 
@@ -219,7 +233,7 @@
         Audit History
       </h2>
       <span class="text-xs" style="font-family: 'DM Mono', monospace; color: var(--text-muted)">
-        {entries.length} entries
+        {total} entries
       </span>
     </div>
 
@@ -278,7 +292,7 @@
                   {#if entry.entryData && typeof entry.entryData === 'object'}
                     <span>
                       Amount: <strong style="color: var(--text)">
-                        {naira((entry.entryData as { amount: number }).amount ?? 0)}
+                        {nairaFromKobo((entry.entryData as { amount: number }).amount ?? 0)}
                       </strong>
                     </span>
                     <span>
@@ -298,6 +312,7 @@
       </div>
     {/if}
 
+    <Pagination {page} {totalPages} {total} onchange={changePage} />
   </div>
 
 {/if}

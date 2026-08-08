@@ -1,21 +1,22 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { members as membersApi } from '$lib/api';
+  import { members as membersApi, groups as groupsApi, type PublicMember } from '$lib/api';
   import { getCollector } from '$lib/auth';
   import { initials } from '$lib/utils';
   import { addToast } from '$lib/stores/toast.store';
   import Badge from '$lib/components/Badge.svelte';
   import EmptyState from '$lib/components/EmptyState.svelte';
   import Modal from '$lib/components/Modal.svelte';
-
-  // ─── Types ───────────────────────────────────────────────
-
-  type Member = Awaited<ReturnType<typeof membersApi.byGroup>>[number];
+  import Pagination from '$lib/components/Pagination.svelte';
 
   // ─── State ───────────────────────────────────────────────
 
   let loading      = $state(true);
-  let memberList   = $state<Member[]>([]);
+  let memberList   = $state<PublicMember[]>([]);
+  let page         = $state(1);
+  let totalPages   = $state(1);
+  let total        = $state(0);
+  let joinCode     = $state<string | null>(null);
   let showModal    = $state(false);
   let submitting   = $state(false);
   let deactivating = $state<string | null>(null); // stores id being deactivated
@@ -25,8 +26,7 @@
     name:        '',
     phoneNumber: '',
     email:       '',
-    role:        'MEMBER',
-    payoutOrder: '',
+    role:        'MEMBER' as 'MEMBER' | 'COLLECTOR',
   });
 
   // ─── Load members ────────────────────────────────────────
@@ -36,7 +36,20 @@
     if (!collector) return;
 
     try {
-      memberList = await membersApi.byGroup(collector.groupId);
+      const res = await membersApi.byGroup(collector.groupId, page, 50);
+      memberList = res.data;
+      totalPages = res.totalPages;
+      total      = res.total;
+
+      // Fetch the join code once (short-circuits because joinCode is set)
+      if (!joinCode) {
+        try {
+          const { joinCode: code } = await groupsApi.joinCode(collector.groupId);
+          joinCode = code;
+        } catch {
+          joinCode = null;
+        }
+      }
     } catch (error) {
       addToast((error as Error).message, 'error');
     } finally {
@@ -45,6 +58,22 @@
   }
 
   onMount(loadMembers);
+
+  function changePage(next: number): void {
+    page = next;
+    loading = true;
+    loadMembers();
+  }
+
+  async function copyJoinCode(): Promise<void> {
+    if (!joinCode) return;
+    try {
+      await navigator.clipboard.writeText(joinCode);
+      addToast(`Join code ${joinCode} copied`, 'success');
+    } catch {
+      addToast(`Your join code is ${joinCode}`, 'info');
+    }
+  }
 
   // ─── Add member ──────────────────────────────────────────
 
@@ -71,14 +100,13 @@
         email:       form.email.trim() || undefined,
         groupId:     collector.groupId,
         role:        form.role,
-        payoutOrder: form.payoutOrder ? parseInt(form.payoutOrder) : undefined,
       });
 
       addToast(`${form.name} added successfully`, 'success');
       showModal = false;
 
       // Reset form
-      form = { name: '', phoneNumber: '', email: '', role: 'MEMBER', payoutOrder: '' };
+      form = { name: '', phoneNumber: '', email: '', role: 'MEMBER' };
 
       // Reload list
       await loadMembers();
@@ -92,7 +120,7 @@
 
   // ─── Deactivate member ───────────────────────────────────
 
-  async function deactivateMember(member: Member): Promise<void> {
+  async function deactivateMember(member: PublicMember): Promise<void> {
     if (!confirm(`Deactivate ${member.name}? They will no longer be able to make contributions.`)) {
       return;
     }
@@ -123,11 +151,25 @@
 
 <!-- ─── Header ─────────────────────────────────────────── -->
 
-<div class="flex items-center justify-between mb-6">
+<div class="flex items-center justify-between mb-6 flex-wrap gap-3">
   <div>
     <p class="text-sm" style="color: var(--text-muted)">
-      {memberList.length} member{memberList.length !== 1 ? 's' : ''} in your group
+      {total} member{total !== 1 ? 's' : ''} in your group
     </p>
+    {#if joinCode}
+      <button
+        onclick={copyJoinCode}
+        class="mt-1.5 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs
+               font-medium transition-opacity hover:opacity-80"
+        style="background: var(--ink); color: var(--accent)"
+        title="Click to copy the invite code"
+      >
+        <span class="tracking-widest" style="font-family: 'DM Mono', monospace">
+          {joinCode}
+        </span>
+        <span>· Share join code</span>
+      </button>
+    {/if}
   </div>
   <button
     onclick={() => showModal = true}
@@ -181,10 +223,6 @@
               style="font-family: 'DM Mono', monospace; color: var(--text-muted)">
             Status
           </th>
-          <th class="text-left px-6 py-4 text-xs uppercase tracking-widest font-medium"
-              style="font-family: 'DM Mono', monospace; color: var(--text-muted)">
-            Payout Order
-          </th>
           <th class="px-6 py-4"></th>
         </tr>
       </thead>
@@ -226,11 +264,6 @@
               <Badge text={member.status} variant={statusVariant(member.status)} />
             </td>
 
-            <!-- Payout order -->
-            <td class="px-6 py-4 text-center" style="color: var(--text-muted)">
-              {member.payoutOrder ?? '—'}
-            </td>
-
             <!-- Actions -->
             <td class="px-6 py-4">
               {#if member.status === 'ACTIVE'}
@@ -254,6 +287,7 @@
     </table>
   {/if}
 
+  <Pagination {page} {totalPages} {total} onchange={changePage} />
 </div>
 
 <!-- ─── Add Member Modal ────────────────────────────────── -->
@@ -310,44 +344,26 @@
       />
       {#if form.role === 'COLLECTOR'}
         <p class="text-xs mt-1" style="color: var(--text-muted)">
-          Required for collectors — used for login
+          Used for Google sign-in
         </p>
       {/if}
     </div>
 
-    <!-- Role + Payout Order side by side -->
-    <div class="grid grid-cols-2 gap-3">
-      <div>
-        <label for="add-member-role" class="block text-xs font-medium mb-1.5 uppercase tracking-wide"
-               style="font-family: 'DM Mono', monospace; color: var(--text-soft)">
-          Role
-        </label>
-        <select
-          id="add-member-role"
-          bind:value={form.role}
-          class="w-full px-4 py-2.5 rounded-xl text-sm outline-none transition-colors"
-          style="background: var(--surface-2); border: 1px solid var(--border); color: var(--text)"
-        >
-          <option value="MEMBER">Member</option>
-          <option value="COLLECTOR">Collector</option>
-        </select>
-      </div>
-
-      <div>
-        <label for="add-member-payout-order" class="block text-xs font-medium mb-1.5 uppercase tracking-wide"
-               style="font-family: 'DM Mono', monospace; color: var(--text-soft)">
-          Payout Order
-        </label>
-        <input
-          id="add-member-payout-order"
-          type="number"
-          bind:value={form.payoutOrder}
-          placeholder="e.g. 1"
-          min="1"
-          class="w-full px-4 py-2.5 rounded-xl text-sm outline-none transition-colors"
-          style="background: var(--surface-2); border: 1px solid var(--border); color: var(--text)"
-        />
-      </div>
+    <!-- Role -->
+    <div>
+      <label for="add-member-role" class="block text-xs font-medium mb-1.5 uppercase tracking-wide"
+             style="font-family: 'DM Mono', monospace; color: var(--text-soft)">
+        Role
+      </label>
+      <select
+        id="add-member-role"
+        bind:value={form.role}
+        class="w-full px-4 py-2.5 rounded-xl text-sm outline-none transition-colors"
+        style="background: var(--surface-2); border: 1px solid var(--border); color: var(--text)"
+      >
+        <option value="MEMBER">Member</option>
+        <option value="COLLECTOR">Collector</option>
+      </select>
     </div>
 
   </div>

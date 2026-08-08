@@ -1,25 +1,24 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { contributions as contribApi, members as membersApi } from '$lib/api';
+  import { contributions as contribApi, members as membersApi, type PublicContribution } from '$lib/api';
   import { getCollector } from '$lib/auth';
   import { naira, fmtDate, shortId } from '$lib/utils';
   import { addToast } from '$lib/stores/toast.store';
   import Badge from '$lib/components/Badge.svelte';
   import EmptyState from '$lib/components/EmptyState.svelte';
-
-  // ─── Types ───────────────────────────────────────────────
-
-  type Contribution = Awaited<ReturnType<typeof contribApi.byGroup>>[number];
-  type Member = Awaited<ReturnType<typeof membersApi.byGroup>>[number];
+  import Pagination from '$lib/components/Pagination.svelte';
 
   // ─── State ───────────────────────────────────────────────
 
   let loading      = $state(true);
-  let contribList  = $state<Contribution[]>([]);
+  let contribList  = $state<PublicContribution[]>([]);
+  let page         = $state(1);
+  let totalPages   = $state(1);
+  let total        = $state(0);
   let memberMap    = $state<Record<string, string>>({});
   let refreshing   = $state(false);
 
-  // Filter state
+  // Filter state (applies to the currently loaded page)
   let filterStatus  = $state('ALL');
   let filterChannel = $state('ALL');
 
@@ -39,15 +38,18 @@
 
     try {
       const [contribs, members] = await Promise.all([
-        contribApi.byGroup(collector.groupId),
-        membersApi.byGroup(collector.groupId),
+        contribApi.byGroup(collector.groupId, page, 50),
+        membersApi.byGroup(collector.groupId, 1, 100),
       ]);
 
-      contribList = contribs;
+      contribList = contribs.data;
+      page        = contribs.page;
+      totalPages  = contribs.totalPages;
+      total       = contribs.total;
 
       // Build a map of memberId → memberName
       // so we can look up names quickly in the table
-      memberMap = members.reduce((acc, m) => {
+      memberMap = members.data.reduce((acc, m) => {
         acc[m.id] = m.name;
         return acc;
       }, {} as Record<string, string>);
@@ -61,6 +63,12 @@
   }
 
   onMount(loadData);
+
+  function changePage(next: number): void {
+    page = next;
+    loading = true;
+    loadData();
+  }
 
   async function refresh(): Promise<void> {
     refreshing = true;
@@ -84,6 +92,7 @@
       WEB:      'blue',
       SMS:      'purple',
       WHATSAPP: 'green',
+      TELEGRAM: 'purple',
     };
     return map[channel] ?? 'blue';
   }
@@ -91,9 +100,9 @@
 
 <!-- ─── Header ─────────────────────────────────────────── -->
 
-<div class="flex items-center justify-between mb-6">
+<div class="flex items-center justify-between mb-6 flex-wrap gap-3">
   <p class="text-sm" style="color: var(--text-muted)">
-    {filtered.length} of {contribList.length} contribution{contribList.length !== 1 ? 's' : ''}
+    {total} contribution{total !== 1 ? 's' : ''} · {filtered.length} on this page
   </p>
 
   <div class="flex items-center gap-3">
@@ -118,8 +127,7 @@
     >
       <option value="ALL">All Channels</option>
       <option value="WEB">Web</option>
-      <option value="SMS">SMS</option>
-      <option value="WHATSAPP">WhatsApp</option>
+      <option value="TELEGRAM">Telegram</option>
     </select>
 
     <!-- Refresh button -->
@@ -158,8 +166,8 @@
   {:else if filtered.length === 0}
     <EmptyState
       icon="📋"
-      title={contribList.length === 0 ? 'No contributions yet' : 'No results'}
-      sub={contribList.length === 0
+      title={total === 0 ? 'No contributions yet' : 'No results'}
+      sub={total === 0
         ? 'Contributions will appear here after they are recorded'
         : 'Try changing the filters'}
     />
@@ -236,4 +244,5 @@
     </table>
   {/if}
 
+  <Pagination {page} {totalPages} {total} onchange={changePage} />
 </div>

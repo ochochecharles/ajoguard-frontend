@@ -1,80 +1,82 @@
 <script lang="ts">
-  import { auth } from '$lib/api';
+  import { resolve } from '$app/paths';
+  import { API_BASE_URL } from '$lib/config';
   import { addToast } from '$lib/stores/toast.store';
 
   // ─── State ───────────────────────────────────────────────
 
-  let step      = $state<'details' | 'group' | 'success'>('details');
+  // Mode: start a new group as a collector, or join an existing one.
+  let mode = $state<'start' | 'join'>('start');
   let submitting = $state(false);
 
-  // Form fields split into two steps
-  let details = $state({
-    name:        '',
-    email:       '',
-    phoneNumber: '',
-  });
-
-  let groupInfo = $state({
+  let startForm = $state({
+    phoneNumber:   '',
     groupName:     '',
     cycleAmount:   '',
-    cycleInterval: 'weekly',
+    cycleInterval: 'weekly' as 'weekly' | 'monthly',
   });
 
-  // ─── Step 1 — Validate personal details ──────────────────
+  let joinForm = $state({
+    phoneNumber: '',
+    joinCode:    '',
+  });
 
-  function goToGroup(): void {
-    if (!details.name.trim()) {
-      addToast('Please enter your full name', 'error');
-      return;
+  // ─── Validation ──────────────────────────────────────────
+
+  function validatePhone(phone: string): boolean {
+    if (!phone.trim()) {
+      addToast('Please enter your phone number', 'error');
+      return false;
     }
-    if (!details.email.trim()) {
-      addToast('Please enter your email address', 'error');
-      return;
-    }
-    if (!details.email.includes('@')) {
-      addToast('Please enter a valid email address', 'error');
-      return;
-    }
-    step = 'group';
+    return true;
   }
 
-  // ─── Step 2 — Submit registration ────────────────────────
+  function startGroup(): void {
+    if (!validatePhone(startForm.phoneNumber)) return;
 
-  async function register(): Promise<void> {
-    if (!groupInfo.groupName.trim()) {
+    if (!startForm.groupName.trim()) {
       addToast('Please enter your group name', 'error');
       return;
     }
 
-    const amount = parseFloat(groupInfo.cycleAmount);
-    if (!groupInfo.cycleAmount || isNaN(amount) || amount <= 0) {
-      addToast('Please enter a valid contribution amount', 'error');
+    const amount = Number(startForm.cycleAmount);
+    if (!startForm.cycleAmount || !Number.isInteger(amount) || amount < 1) {
+      addToast('Enter the contribution amount as a whole number of Naira (e.g. 5000)', 'error');
       return;
     }
 
     submitting = true;
+    const params = new URLSearchParams({
+      phoneNumber:   startForm.phoneNumber.trim(),
+      groupName:     startForm.groupName.trim(),
+      cycleAmount:   String(amount),
+      cycleInterval: startForm.cycleInterval,
+    });
+    window.location.href = `${API_BASE_URL}/auth/google?${params.toString()}`;
+  }
 
-    try {
-      await auth.register({
-        name:          details.name.trim(),
-        email:         details.email.trim(),
-        phoneNumber:   details.phoneNumber.trim() || undefined,
-        groupName:     groupInfo.groupName.trim(),
-        cycleAmount:   amount,
-        cycleInterval: groupInfo.cycleInterval,
-      });
+  function joinGroup(): void {
+    if (!validatePhone(joinForm.phoneNumber)) return;
 
-      step = 'success';
-
-    } catch (error) {
-      addToast((error as Error).message, 'error');
-    } finally {
-      submitting = false;
+    const code = joinForm.joinCode.trim().toUpperCase();
+    if (!code) {
+      addToast('Please enter the group join code', 'error');
+      return;
     }
+
+    submitting = true;
+    const params = new URLSearchParams({
+      phoneNumber: joinForm.phoneNumber.trim(),
+      joinCode:    code,
+    });
+    window.location.href = `${API_BASE_URL}/auth/google?${params.toString()}`;
+  }
+
+  function go(handler: () => void): void {
+    if (submitting) return;
+    handler();
   }
 </script>
-
-<!-- ─── Page ─────────────────────────────────────────────── -->
 
 <div class="min-h-screen flex items-center justify-center p-4"
      style="background: var(--ink)">
@@ -96,122 +98,72 @@
     <!-- Card -->
     <div class="rounded-2xl p-8" style="background: var(--surface)">
 
-      {#if step === 'details'}
-        <!-- ── Step 1 — Personal details ── -->
+      <h1 class="text-xl font-bold mb-1"
+          style="font-family: 'Syne', sans-serif">
+        Create your account
+      </h1>
+      <p class="text-sm mb-6" style="color: var(--text-muted)">
+        Your identity comes from Google — we just need your group details.
+      </p>
 
-        <div class="flex items-center gap-2 mb-6">
-          <div class="flex gap-1.5">
-            <div class="w-2 h-2 rounded-full" style="background: var(--accent)"></div>
-            <div class="w-2 h-2 rounded-full" style="background: var(--border)"></div>
-          </div>
-          <span class="text-xs" style="color: var(--text-muted)">Step 1 of 2</span>
-        </div>
-
-        <h1 class="text-xl font-bold mb-1"
-            style="font-family: 'Syne', sans-serif">
-          Create your account
-        </h1>
-        <p class="text-sm mb-6" style="color: var(--text-muted)">
-          Set up your collector profile
-        </p>
-
-        <div class="space-y-4">
-
-          <div>
-            <label class="block text-xs font-medium mb-1.5 uppercase tracking-wide"
-                   style="font-family: 'DM Mono', monospace; color: var(--text-soft)">
-              Full Name *
-            </label>
-            <input
-              type="text"
-              bind:value={details.name}
-              placeholder="e.g. Mama Ngozi"
-              class="w-full px-4 py-3 rounded-xl text-sm outline-none transition-colors"
-              style="background: var(--surface-2); border: 1px solid var(--border); color: var(--text)"
-            />
-          </div>
-
-          <div>
-            <label class="block text-xs font-medium mb-1.5 uppercase tracking-wide"
-                   style="font-family: 'DM Mono', monospace; color: var(--text-soft)">
-              Email Address *
-            </label>
-            <input
-              type="email"
-              bind:value={details.email}
-              placeholder="collector@gmail.com"
-              class="w-full px-4 py-3 rounded-xl text-sm outline-none transition-colors"
-              style="background: var(--surface-2); border: 1px solid var(--border); color: var(--text)"
-            />
-            <p class="text-xs mt-1.5" style="color: var(--text-muted)">
-              Used to receive your login code
-            </p>
-          </div>
-
-          <div>
-            <label class="block text-xs font-medium mb-1.5 uppercase tracking-wide"
-                   style="font-family: 'DM Mono', monospace; color: var(--text-soft)">
-              Phone Number
-            </label>
-            <input
-              type="text"
-              bind:value={details.phoneNumber}
-              placeholder="08012345678 (optional)"
-              class="w-full px-4 py-3 rounded-xl text-sm outline-none transition-colors"
-              style="background: var(--surface-2); border: 1px solid var(--border); color: var(--text)"
-            />
-            <p class="text-xs mt-1.5" style="color: var(--text-muted)">
-              Used for SMS contribution logging
-            </p>
-          </div>
-
-          <button
-            onclick={goToGroup}
-            class="w-full py-3 rounded-xl text-sm font-semibold transition-opacity"
-            style="background: var(--accent); color: var(--ink)"
-          >
-            Continue →
-          </button>
-
-        </div>
-
-      {:else if step === 'group'}
-        <!-- ── Step 2 — Group details ── -->
-
-        <div class="flex items-center gap-2 mb-6">
-          <div class="flex gap-1.5">
-            <div class="w-2 h-2 rounded-full" style="background: var(--accent)"></div>
-            <div class="w-2 h-2 rounded-full" style="background: var(--accent)"></div>
-          </div>
-          <span class="text-xs" style="color: var(--text-muted)">Step 2 of 2</span>
-        </div>
-
+      <!-- Mode toggle -->
+      <div class="grid grid-cols-2 gap-2 mb-6">
         <button
-          onclick={() => step = 'details'}
-          class="flex items-center gap-1 text-xs mb-5 transition-opacity hover:opacity-70"
-          style="color: var(--text-muted)"
+          onclick={() => mode = 'start'}
+          class="py-2.5 rounded-xl text-sm font-medium transition-all border"
+          style="
+            background: {mode === 'start' ? 'var(--ink)' : 'var(--surface-2)'};
+            color: {mode === 'start' ? 'var(--accent)' : 'var(--text-muted)'};
+            border-color: {mode === 'start' ? 'var(--ink-muted)' : 'var(--border)'};
+          "
         >
-          ← Back
+          Start a group
         </button>
+        <button
+          onclick={() => mode = 'join'}
+          class="py-2.5 rounded-xl text-sm font-medium transition-all border"
+          style="
+            background: {mode === 'join' ? 'var(--ink)' : 'var(--surface-2)'};
+            color: {mode === 'join' ? 'var(--accent)' : 'var(--text-muted)'};
+            border-color: {mode === 'join' ? 'var(--ink-muted)' : 'var(--border)'};
+          "
+        >
+          Join with code
+        </button>
+      </div>
 
-        <h1 class="text-xl font-bold mb-1"
-            style="font-family: 'Syne', sans-serif">
-          Set up your group
-        </h1>
-        <p class="text-sm mb-6" style="color: var(--text-muted)">
-          Configure your savings group details
-        </p>
+      {#if mode === 'start'}
+        <!-- ── Start a new savings group ── -->
 
         <div class="space-y-4">
 
           <div>
-            <label class="block text-xs font-medium mb-1.5 uppercase tracking-wide"
+            <label for="reg-phone" class="block text-xs font-medium mb-1.5 uppercase tracking-wide"
+                   style="font-family: 'DM Mono', monospace; color: var(--text-soft)">
+              Phone Number *
+            </label>
+            <input
+              id="reg-phone"
+              type="tel"
+              bind:value={startForm.phoneNumber}
+              placeholder="08012345678"
+              class="w-full px-4 py-3 rounded-xl text-sm outline-none transition-colors"
+              style="background: var(--surface-2); border: 1px solid var(--border); color: var(--text)"
+            />
+            <p class="text-xs mt-1.5" style="color: var(--text-muted)">
+              Used to link your account to contribution logging
+            </p>
+          </div>
+
+          <div>
+            <label for="reg-group-name" class="block text-xs font-medium mb-1.5 uppercase tracking-wide"
                    style="font-family: 'DM Mono', monospace; color: var(--text-soft)">
               Group Name *
             </label>
             <input
+              id="reg-group-name"
               type="text"
-              bind:value={groupInfo.groupName}
+              bind:value={startForm.groupName}
               placeholder="e.g. Mama Ngozi Savings"
               class="w-full px-4 py-3 rounded-xl text-sm outline-none transition-colors"
               style="background: var(--surface-2); border: 1px solid var(--border); color: var(--text)"
@@ -219,7 +171,7 @@
           </div>
 
           <div>
-            <label class="block text-xs font-medium mb-1.5 uppercase tracking-wide"
+            <label for="reg-amount" class="block text-xs font-medium mb-1.5 uppercase tracking-wide"
                    style="font-family: 'DM Mono', monospace; color: var(--text-soft)">
               Contribution Amount (₦) *
             </label>
@@ -227,59 +179,45 @@
               <span class="absolute left-4 top-1/2 -translate-y-1/2 text-sm"
                     style="color: var(--text-muted)">₦</span>
               <input
+                id="reg-amount"
                 type="number"
-                bind:value={groupInfo.cycleAmount}
-                placeholder="0.00"
+                bind:value={startForm.cycleAmount}
+                placeholder="5000"
                 min="1"
+                step="1"
                 class="w-full pl-8 pr-4 py-3 rounded-xl text-sm outline-none transition-colors"
                 style="background: var(--surface-2); border: 1px solid var(--border); color: var(--text)"
               />
             </div>
             <p class="text-xs mt-1.5" style="color: var(--text-muted)">
-              How much each member contributes per cycle
+              Whole Naira — how much each member pays per cycle
             </p>
           </div>
 
-          <div>
-            <label class="block text-xs font-medium mb-1.5 uppercase tracking-wide"
-                   style="font-family: 'DM Mono', monospace; color: var(--text-soft)">
+          <fieldset class="space-y-2">
+            <legend class="block text-xs font-medium mb-1.5 uppercase tracking-wide"
+                    style="font-family: 'DM Mono', monospace; color: var(--text-soft)">
               Cycle Interval *
-            </label>
+            </legend>
             <div class="grid grid-cols-2 gap-2">
-              {#each ['weekly', 'monthly'] as interval}
+              {#each ['weekly', 'monthly'] as interval (interval)}
                 <button
-                  onclick={() => groupInfo.cycleInterval = interval}
+                  onclick={() => startForm.cycleInterval = interval as 'weekly' | 'monthly'}
                   class="py-3 rounded-xl text-sm font-medium transition-all border capitalize"
                   style="
-                    background: {groupInfo.cycleInterval === interval ? 'var(--ink)' : 'var(--surface-2)'};
-                    color: {groupInfo.cycleInterval === interval ? 'var(--accent)' : 'var(--text-muted)'};
-                    border-color: {groupInfo.cycleInterval === interval ? 'var(--ink-muted)' : 'var(--border)'};
+                    background: {startForm.cycleInterval === interval ? 'var(--ink)' : 'var(--surface-2)'};
+                    color: {startForm.cycleInterval === interval ? 'var(--accent)' : 'var(--text-muted)'};
+                    border-color: {startForm.cycleInterval === interval ? 'var(--ink-muted)' : 'var(--border)'};
                   "
                 >
                   {interval}
                 </button>
               {/each}
             </div>
-          </div>
-
-          <!-- Summary box -->
-          {#if groupInfo.groupName && groupInfo.cycleAmount}
-            <div class="rounded-xl p-4"
-                 style="background: var(--surface-2); border: 1px solid var(--border)">
-              <div class="text-xs uppercase tracking-wide mb-2 font-medium"
-                   style="font-family: 'DM Mono', monospace; color: var(--text-muted)">
-                Summary
-              </div>
-              <div class="text-sm space-y-1" style="color: var(--text-soft)">
-                <div>Group: <strong style="color: var(--text)">{groupInfo.groupName}</strong></div>
-                <div>Each member pays: <strong style="color: var(--text)">₦{parseFloat(groupInfo.cycleAmount || '0').toLocaleString()}</strong></div>
-                <div>Frequency: <strong style="color: var(--text)">{groupInfo.cycleInterval}</strong></div>
-              </div>
-            </div>
-          {/if}
+          </fieldset>
 
           <button
-            onclick={register}
+            onclick={() => go(startGroup)}
             disabled={submitting}
             class="w-full py-3 rounded-xl text-sm font-semibold transition-opacity
                    disabled:opacity-60 flex items-center justify-center gap-2"
@@ -289,53 +227,79 @@
               <span class="w-4 h-4 rounded-full border-2 animate-spin"
                     style="border-color: var(--ink); border-top-color: transparent">
               </span>
-              Creating account...
+              Redirecting to Google...
             {:else}
-              Create Account
+              Continue with Google
             {/if}
           </button>
-
         </div>
 
       {:else}
-        <!-- ── Step 3 — Success ── -->
+        <!-- ── Join an existing group ── -->
 
-        <div class="text-center py-4">
-          <div class="text-5xl mb-4">🎉</div>
-          <h1 class="text-xl font-bold mb-2"
-              style="font-family: 'Syne', sans-serif">
-            Account created!
-          </h1>
-          <p class="text-sm mb-2" style="color: var(--text-muted)">
-            Your group has been set up successfully.
-          </p>
-          <p class="text-sm mb-8" style="color: var(--text-muted)">
-            Log in with your email address to access your dashboard.
-          </p>
-          <a
-            href="/login"
-            class="block w-full py-3 rounded-xl text-sm font-semibold
-                   text-center no-underline"
+        <div class="space-y-4">
+
+          <div>
+            <label for="join-phone" class="block text-xs font-medium mb-1.5 uppercase tracking-wide"
+                   style="font-family: 'DM Mono', monospace; color: var(--text-soft)">
+              Phone Number *
+            </label>
+            <input
+              id="join-phone"
+              type="tel"
+              bind:value={joinForm.phoneNumber}
+              placeholder="08012345678"
+              class="w-full px-4 py-3 rounded-xl text-sm outline-none transition-colors"
+              style="background: var(--surface-2); border: 1px solid var(--border); color: var(--text)"
+            />
+          </div>
+
+          <div>
+            <label for="join-code" class="block text-xs font-medium mb-1.5 uppercase tracking-wide"
+                   style="font-family: 'DM Mono', monospace; color: var(--text-soft)">
+              Group Join Code *
+            </label>
+            <input
+              id="join-code"
+              type="text"
+              bind:value={joinForm.joinCode}
+              placeholder="e.g. ABC123"
+              maxlength="6"
+              class="w-full px-4 py-3 rounded-xl text-sm uppercase tracking-widest outline-none transition-colors"
+              style="background: var(--surface-2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace"
+            />
+            <p class="text-xs mt-1.5" style="color: var(--text-muted)">
+              Ask the group collector for their 6-character join code
+            </p>
+          </div>
+
+          <button
+            onclick={() => go(joinGroup)}
+            disabled={submitting}
+            class="w-full py-3 rounded-xl text-sm font-semibold transition-opacity
+                   disabled:opacity-60 flex items-center justify-center gap-2"
             style="background: var(--accent); color: var(--ink)"
           >
-            Go to Login
-          </a>
+            {#if submitting}
+              <span class="w-4 h-4 rounded-full border-2 animate-spin"
+                    style="border-color: var(--ink); border-top-color: transparent">
+              </span>
+              Redirecting to Google...
+            {:else}
+              Join with Google
+            {/if}
+          </button>
         </div>
-
       {/if}
-
     </div>
 
     <!-- Login link -->
-    {#if step !== 'success'}
-      <p class="text-center text-xs mt-6" style="color: var(--text-muted)">
-        Already have an account?
-        <a href="/login" class="font-medium" style="color: var(--accent)">
-          Log in
-        </a>
-      </p>
-    {/if}
+    <p class="text-center text-xs mt-6" style="color: var(--text-muted)">
+      Already have an account?
+      <a href={resolve('/login')} class="font-medium" style="color: var(--accent)">
+        Log in
+      </a>
+    </p>
 
   </div>
-
 </div>

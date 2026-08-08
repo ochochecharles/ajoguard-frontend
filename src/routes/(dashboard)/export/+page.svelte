@@ -1,18 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { exports as exportApi, members as membersApi } from '$lib/api';
+  import { exports as exportApi, members as membersApi, type PublicMember } from '$lib/api';
   import { getCollector } from '$lib/auth';
   import { addToast } from '$lib/stores/toast.store';
   import EmptyState from '$lib/components/EmptyState.svelte';
 
-  // ─── Types ───────────────────────────────────────────────
-
-  type Member = Awaited<ReturnType<typeof membersApi.byGroup>>[number];
-
   // ─── State ───────────────────────────────────────────────
 
   let loading         = $state(true);
-  let memberList      = $state<Member[]>([]);
+  let memberList      = $state<PublicMember[]>([]);
   let selectedMember  = $state('');
 
   // Track which download is in progress
@@ -26,7 +22,8 @@
     if (!collector) return;
 
     try {
-      memberList = await membersApi.byGroup(collector.groupId);
+      const res = await membersApi.byGroup(collector.groupId, 1, 100);
+      memberList = res.data;
     } catch (error) {
       addToast((error as Error).message, 'error');
     } finally {

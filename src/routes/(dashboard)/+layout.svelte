@@ -76,14 +76,15 @@
 
     <!-- Navigation -->
     <nav class="flex-1 px-3">
-      {#each navSections as section}
+      {#each navSections as section (section.title)}
         <div class="px-2 mb-2 mt-4 text-xs tracking-widest uppercase first:mt-0"
              style="font-family: 'DM Mono', monospace; color: var(--text-muted)">
           {section.title}
         </div>
 
-        {#each section.items as item}
+        {#each section.items as item (item.href)}
           {@const isActive = currentPath === item.href}
+          <!-- eslint-disable svelte/no-navigation-without-resolve -->
           <a
             href={item.href}
             onclick={closeSidebar}
@@ -93,6 +94,7 @@
           >
             {item.label}
           </a>
+          <!-- eslint-enable svelte/no-navigation-without-resolve -->
         {/each}
       {/each}
     </nav>
@@ -161,8 +163,8 @@
             </div>
             <div class="hidden sm:block">
               <div class="text-sm font-medium leading-tight">{collector.name}</div>
-              <div class="text-xs leading-tight" style="color: var(--text-muted)">
-                Collector
+              <div class="text-xs leading-tight capitalize" style="color: var(--text-muted)">
+                {collector.role === 'COLLECTOR' ? 'Collector' : 'Member'}
               </div>
             </div>
           </div>

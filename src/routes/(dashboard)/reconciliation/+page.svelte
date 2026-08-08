@@ -10,7 +10,6 @@
   // ─── Types ───────────────────────────────────────────────
 
   type Summary = Awaited<ReturnType<typeof groups.summary>>;
-  type Member  = Summary['members'][number];
 
   // ─── State ───────────────────────────────────────────────
 

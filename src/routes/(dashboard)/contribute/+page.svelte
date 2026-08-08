@@ -1,36 +1,30 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { members as membersApi, contributions as contribApi } from '$lib/api';
+  import { members as membersApi, contributions as contribApi, type PublicMember } from '$lib/api';
   import { getCollector } from '$lib/auth';
-  import { naira, shortId, fmtDate } from '$lib/utils';
+  import { naira, fmtDate } from '$lib/utils';
   import { addToast } from '$lib/stores/toast.store';
-  import Badge from '$lib/components/Badge.svelte';
   import EmptyState from '$lib/components/EmptyState.svelte';
 
   // ─── Types ───────────────────────────────────────────────
 
-  type Member = Awaited<ReturnType<typeof membersApi.byGroup>>[number];
-
   interface RecentContrib {
-    eventId:       string;
-    amountInNaira: number;
-    channel:       string;
-    receivedAt:    string;
-    memberName:    string;
+    eventId:    string;
+    amount:     number; // naira
+    channel:    string;
+    receivedAt: string;
+    memberName: string;
   }
-
-  // ─── State ───────────────────────────────────────────────
 
   let loading     = $state(true);
   let submitting  = $state(false);
-  let memberList  = $state<Member[]>([]);
+  let memberList  = $state<PublicMember[]>([]);
   let recent      = $state<RecentContrib[]>([]);
 
-  // Form fields
+  // Form fields — the web form always records through the WEB channel
   let form = $state({
     memberId: '',
     amount:   '',
-    channel:  'WEB',
   });
 
   // ─── Load data ───────────────────────────────────────────
@@ -40,10 +34,10 @@
     if (!collector) return;
 
     try {
-      // Load active regular members only
-      // Collectors cannot contribute to themselves
-      const all = await membersApi.byGroup(collector.groupId);
-      memberList = all.filter(
+      // Load active regular members only.
+      // Collectors cannot contribute to themselves.
+      const all = await membersApi.byGroup(collector.groupId, 1, 100);
+      memberList = all.data.filter(
         m => m.role === 'MEMBER' && m.status === 'ACTIVE'
       );
     } catch (error) {
@@ -65,9 +59,9 @@
       return;
     }
 
-    const amount = parseFloat(form.amount);
-    if (!form.amount || isNaN(amount) || amount <= 0) {
-      addToast('Please enter a valid amount', 'error');
+    const amount = Number(form.amount);
+    if (!form.amount || !Number.isInteger(amount) || amount < 1) {
+      addToast('Enter the amount as a whole number of Naira (e.g. 5000)', 'error');
       return;
     }
 
@@ -77,8 +71,8 @@
       const result = await contribApi.ingestWeb({
         groupId:  collector.groupId,
         memberId: form.memberId,
-        amount,       // in naira — backend converts to kobo
-        channel:  form.channel,
+        amount,        // integer naira — backend converts to kobo
+        channel:  'WEB',
       });
 
       // Find member name for recent activity
@@ -87,21 +81,21 @@
       // Add to recent activity list
       recent = [
         {
-          eventId:       result.eventId,
-          amountInNaira: result.amountInNaira,
-          channel:       result.channel,
-          receivedAt:    result.receivedAt,
-          memberName:    member?.name ?? 'Unknown',
+          eventId:    result.eventId,
+          memberName: member?.name ?? 'Unknown',
+          amount:     result.amount,
+          channel:    result.channel,
+          receivedAt: result.receivedAt,
         },
         ...recent,
       ].slice(0, 10); // keep last 10
 
       addToast(
-        `₦${result.amountInNaira.toLocaleString()} recorded for ${member?.name}`,
+        `${naira(result.amount)} recorded for ${member?.name}`,
         'success'
       );
 
-      // Reset form — keep channel selection
+      // Reset form
       form.memberId = '';
       form.amount   = '';
 
@@ -110,17 +104,6 @@
     } finally {
       submitting = false;
     }
-  }
-
-  // ─── Channel badge variant ───────────────────────────────
-
-  function channelVariant(channel: string) {
-    const map: Record<string, 'blue' | 'purple' | 'green'> = {
-      WEB:      'blue',
-      SMS:      'purple',
-      WHATSAPP: 'green',
-    };
-    return map[channel] ?? 'blue';
   }
 </script>
 
@@ -188,38 +171,31 @@
               id="amount"
               type="number"
               bind:value={form.amount}
-              placeholder="0.00"
+              placeholder="5000"
               min="1"
-              step="any"
+              step="1"
               class="w-full pl-8 pr-4 py-2.5 rounded-xl text-sm outline-none transition-colors"
               style="background: var(--surface-2); border: 1px solid var(--border); color: var(--text)"
               onkeydown={(e) => e.key === 'Enter' && submitContribution()}
             />
           </div>
+          <p class="text-xs mt-1.5" style="color: var(--text-muted)">
+            Whole Naira — defaults to the group cycle amount
+          </p>
         </div>
 
-        <!-- Channel -->
-        <fieldset class="space-y-2">
-          <legend class="block text-xs font-medium mb-1.5 uppercase tracking-wide"
-                  style="font-family: 'DM Mono', monospace; color: var(--text-soft)">
+        <!-- Channel (fixed — web form) -->
+        <div>
+          <span class="block text-xs font-medium mb-1.5 uppercase tracking-wide"
+                style="font-family: 'DM Mono', monospace; color: var(--text-soft)">
             Channel
-          </legend>
-          <div role="group" aria-label="Channel" class="grid grid-cols-3 gap-2">
-            {#each ['WEB', 'SMS', 'WHATSAPP'] as ch}
-              <button
-                onclick={() => form.channel = ch}
-                class="py-2 rounded-xl text-xs font-medium transition-all border"
-                style="
-                  background: {form.channel === ch ? 'var(--ink)' : 'var(--surface-2)'};
-                  color: {form.channel === ch ? 'var(--accent)' : 'var(--text-muted)'};
-                  border-color: {form.channel === ch ? 'var(--ink-muted)' : 'var(--border)'};
-                "
-              >
-                {ch}
-              </button>
-            {/each}
+          </span>
+          <div class="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium"
+               style="background: var(--surface-2); border: 1px solid var(--border); color: var(--text-soft)">
+            <span class="w-2 h-2 rounded-full" style="background: var(--accent-2)"></span>
+            WEB
           </div>
-        </fieldset>
+        </div>
 
         <!-- Submit button -->
         <button
@@ -263,17 +239,19 @@
           <div class="flex items-center justify-between py-3"
                style="border-bottom: 1px solid var(--surface-2)">
             <div class="flex items-center gap-3 min-w-0">
-              <!-- Channel badge -->
-              <Badge text={item.channel} variant={channelVariant(item.channel)} />
+              <span class="text-xs font-medium"
+                    style="font-family: 'DM Mono', monospace; color: var(--text-muted)">
+                WEB
+              </span>
               <div class="min-w-0">
                 <div class="text-sm font-medium truncate">{item.memberName}</div>
                 <div class="text-xs" style="color: var(--text-muted)">
-                  Ref: {shortId(item.eventId)} · {fmtDate(item.receivedAt)}
+                  {fmtDate(item.receivedAt)}
                 </div>
               </div>
             </div>
             <div class="text-sm font-bold shrink-0 ml-3">
-              ₦{item.amountInNaira.toLocaleString()}
+              {naira(item.amount)}
             </div>
           </div>
         {/each}

@@ -1,10 +1,10 @@
 import { browser } from '$app/environment';
 import { redirect } from '@sveltejs/kit';
+import { getToken } from '$lib/auth';
 
 export function load() {
   if (browser) {
-    const token = localStorage.getItem('ajoguard_token');
-    if (token) {
+    if (getToken()) {
       redirect(302, '/');
     }
   }

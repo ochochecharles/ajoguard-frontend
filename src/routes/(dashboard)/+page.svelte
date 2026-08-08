@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { groups, contributions } from '$lib/api';
   import { getCollector } from '$lib/auth';
-  import { naira, fmtDate, shortId, initials } from '$lib/utils';
+  import { naira, shortId, initials } from '$lib/utils';
   import { addToast } from '$lib/stores/toast.store';
   import Badge from '$lib/components/Badge.svelte';
   import EmptyState from '$lib/components/EmptyState.svelte';
@@ -38,8 +38,8 @@
 
   // ─── Derived values ──────────────────────────────────────
 
-  // Total contribution count
-  let contribCount = $derived(contribs?.length ?? 0);
+  // Total contribution count (uses server total, page-limited if not loaded)
+  let contribCount = $derived(contribs ? (contribs.total ?? contribs.data.length) : 0);
 
   // Payment compliance percentage
   let compliancePct = $derived(() => {
@@ -50,7 +50,7 @@
   });
 
   // Recent contributions — last 8 only
-  let recentContribs = $derived(contribs?.slice(0, 8) ?? []);
+  let recentContribs = $derived(contribs?.data.slice(0, 8) ?? []);
 
   // Channel badge variant mapping
   function channelVariant(channel: string) {
