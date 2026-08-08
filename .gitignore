@@ -24,3 +24,6 @@ vite.config.ts.timestamp-*
 
 #misc
 PRODUCTION_READINESS_AUDIT.md
+.vercel
+.env*
+!.env.example

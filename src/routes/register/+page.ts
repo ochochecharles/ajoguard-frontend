@@ -5,7 +5,7 @@ import { getToken } from '$lib/auth';
 export function load() {
   if (browser) {
     if (getToken()) {
-      redirect(302, '/');
+      redirect(302, '/app');
     }
   }
 }

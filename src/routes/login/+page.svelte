@@ -65,7 +65,7 @@
       const result = await auth.googleLogin(response.credential);
       saveAuth(result);
       addToast(`Welcome back, ${result.collector.name}`, 'success');
-      window.location.href = '/';
+      window.location.href = '/app';
     } catch (error) {
       addToast((error as Error).message, 'error');
       // An unregistered email — let them register instead.

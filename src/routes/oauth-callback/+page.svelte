@@ -29,7 +29,7 @@
         saveAuth({ accessToken, refreshToken, expiresIn, collector });
         // Clean the hash out of the URL before navigating.
         history.replaceState(null, '', window.location.pathname);
-        window.location.href = '/';
+        window.location.href = '/app';
       } catch {
         error = 'Could not restore your session. Please try again.';
         setTimeout(() => {
