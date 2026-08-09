@@ -43,16 +43,17 @@ export interface Paginated<T> {
 }
 
 export interface PublicMember {
-  id:          string;
-  name:        string;
-  phoneNumber: string | null;
-  email:       string | null;
-  role:        string;
-  status:      string;
-  payoutOrder: number | null;
-  groupId:     string;
-  createdAt:   string;
-  updatedAt:   string;
+  id:              string;
+  name:            string;
+  phoneNumber:     string | null;
+  email:           string | null;
+  role:            string;
+  status:          string;
+  payoutOrder:     number | null;
+  isTelegramLinked: boolean;
+  groupId:         string;
+  createdAt:       string;
+  updatedAt:       string;
 }
 
 export interface PublicGroup {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { members as membersApi, groups as groupsApi, type PublicMember } from '$lib/api';
+  import { TELEGRAM_BOT_HANDLE, TELEGRAM_BOT_LABEL, TELEGRAM_START_URL } from '$lib/config';
   import { getCollector } from '$lib/auth';
   import { initials } from '$lib/utils';
   import { addToast } from '$lib/stores/toast.store';
@@ -20,6 +21,12 @@
   let showModal    = $state(false);
   let submitting   = $state(false);
   let deactivating = $state<string | null>(null); // stores id being deactivated
+
+  // Telegram linkage (derived from the fetched member list)
+  let telegramLinked     = $derived(memberList.filter((m) => m.isTelegramLinked).length);
+  let telegramNeedsPhone = $derived(
+    memberList.filter((m) => !m.isTelegramLinked && !m.phoneNumber).length
+  );
 
   // Form fields
   let form = $state({
@@ -73,6 +80,40 @@
     } catch {
       addToast(`Your join code is ${joinCode}`, 'info');
     }
+  }
+
+  // ─── Telegram instructions ────────────────────────────
+
+  /** Ready-to-broadcast walkthrough for members to link their number. */
+  function telegramMessage(): string {
+    const bot = TELEGRAM_BOT_LABEL || 'the group Telegram bot';
+    return [
+      'Your ajo group is on Telegram for contribution updates.',
+      '',
+      `1. Open Telegram and search for ${bot}`,
+      '2. Start the conversation and press Start',
+      '3. Send the exact phone number registered with the group (e.g. 08012345678)',
+      '',
+      "That is it. Confirmation messages and payment reminders will come through Telegram once it's linked.",
+    ].join('\n');
+  }
+
+  async function copyTelegramInstructions(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(telegramMessage());
+      addToast('Instructions copied — send them to your group', 'success');
+    } catch {
+      addToast('Copy blocked — the instructions are shown on screen, send them from there', 'info');
+    }
+  }
+
+  // ─── Badge helpers ───────────────────────────────────────
+
+  function telegramBadge(member: PublicMember): { text: string; variant: 'green' | 'gray' | 'yellow' } {
+    if (member.isTelegramLinked) return { text: 'Linked', variant: 'green' };
+    return member.phoneNumber
+      ? { text: 'Not linked', variant: 'gray' }
+      : { text: 'Needs phone', variant: 'yellow' };
   }
 
   // ─── Add member ──────────────────────────────────────────
@@ -181,6 +222,75 @@
   </button>
 </div>
 
+<!-- ─── Telegram channel panel ─────────────────────────── -->
+
+{#if TELEGRAM_BOT_HANDLE}
+  <div class="rounded-2xl p-5 mb-6" style="background: white; border: 1px solid var(--border)">
+    <div class="flex flex-col md:flex-row md:items-start justify-between gap-4">
+      <div class="min-w-0">
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full shrink-0" style="background: var(--accent-2)"></span>
+          <h2 class="text-sm font-bold" style="font-family: 'Syne', sans-serif">Telegram channel</h2>
+        </div>
+        <p class="text-xs mt-1.5 leading-relaxed max-w-xl" style="color: var(--text-muted)">
+          Members link their phone number to the Telegram bot to get contribution reminders
+          on Telegram. Ask them to follow the steps below — or use the copy button to send
+          one message to the whole group.
+        </p>
+        <div class="flex flex-wrap items-center gap-2 mt-3 text-xs" style="font-family: 'DM Mono', monospace">
+          <span class="px-2.5 py-1 rounded-lg" style="background: var(--surface-2); color: var(--text-soft)">
+            {telegramLinked} of {total} linked
+          </span>
+          {#if telegramNeedsPhone > 0}
+            <span class="px-2.5 py-1 rounded-lg" style="background: #fef3c7; color: #b45309">
+              {telegramNeedsPhone} need{telegramNeedsPhone === 1 ? 's' : ''} a phone number
+            </span>
+          {/if}
+        </div>
+      </div>
+      <div class="flex flex-col sm:flex-row gap-2 shrink-0">
+        <!-- eslint-disable svelte/no-navigation-without-resolve -->
+        <a
+          href={TELEGRAM_START_URL}
+          target="_blank"
+          rel="noopener"
+          class="px-3 py-2 rounded-lg text-sm font-semibold text-center transition-opacity hover:opacity-80"
+          style="background: var(--ink); color: var(--accent)"
+        >
+          Open in Telegram
+        </a>
+        <!-- eslint-enable svelte/no-navigation-without-resolve -->
+        <button
+          onclick={copyTelegramInstructions}
+          class="px-3 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80"
+          style="background: var(--surface-2); color: var(--text)"
+        >
+          Copy instructions
+        </button>
+      </div>
+    </div>
+
+    <div class="mt-4 rounded-xl p-4" style="background: var(--surface-2)">
+      <div class="text-[10px] uppercase tracking-widest mb-2"
+           style="font-family: 'DM Mono', monospace; color: var(--text-muted)">
+        Share with your members
+      </div>
+      <pre class="text-xs whitespace-pre-wrap leading-relaxed font-sans" style="color: var(--text)">{telegramMessage()}</pre>
+    </div>
+  </div>
+{:else}
+  <div class="rounded-2xl p-5 mb-6" style="background: white; border: 1px solid var(--border)">
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full" style="background: var(--text-muted)"></span>
+      <h2 class="text-sm font-bold" style="font-family: 'Syne', sans-serif">Telegram channel</h2>
+    </div>
+    <p class="text-xs mt-1.5" style="color: var(--text-muted)">
+      Telegram isn't connected for this group yet. Members will link their
+      numbers here once the bot is available.
+    </p>
+  </div>
+{/if}
+
 <!-- ─── Table ──────────────────────────────────────────── -->
 
 <div class="rounded-2xl overflow-x-auto" style="background: white; border: 1px solid var(--border)">
@@ -214,6 +324,10 @@
           <th class="text-left px-6 py-4 text-xs uppercase tracking-widest font-medium"
               style="font-family: 'DM Mono', monospace; color: var(--text-muted)">
             Email
+          </th>
+          <th class="text-left px-6 py-4 text-xs uppercase tracking-widest font-medium"
+              style="font-family: 'DM Mono', monospace; color: var(--text-muted)">
+            Telegram
           </th>
           <th class="text-left px-6 py-4 text-xs uppercase tracking-widest font-medium"
               style="font-family: 'DM Mono', monospace; color: var(--text-muted)">
@@ -252,6 +366,14 @@
             <!-- Email -->
             <td class="px-6 py-4" style="font-size: 12px; color: var(--text-soft)">
               {member.email ?? '—'}
+            </td>
+
+            <!-- Telegram -->
+            <td class="px-6 py-4">
+              <Badge
+                text={telegramBadge(member).text}
+                variant={telegramBadge(member).variant}
+              />
             </td>
 
             <!-- Role -->
