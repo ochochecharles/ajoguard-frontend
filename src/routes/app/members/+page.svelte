@@ -28,6 +28,9 @@
     memberList.filter((m) => !m.isTelegramLinked && !m.phoneNumber).length
   );
 
+  // Only the group's collector may view the join code or manage members
+  let isCollector = $derived(getCollector()?.role === 'COLLECTOR');
+
   // Form fields
   let form = $state({
     name:        '',
@@ -48,8 +51,8 @@
       totalPages = res.totalPages;
       total      = res.total;
 
-      // Fetch the join code once (short-circuits because joinCode is set)
-      if (!joinCode) {
+      // Fetch the join code once — collectors only (short-circuits because joinCode is set)
+      if (!joinCode && isCollector) {
         try {
           const { joinCode: code } = await groupsApi.joinCode(collector.groupId);
           joinCode = code;
@@ -212,14 +215,16 @@
       </button>
     {/if}
   </div>
-  <button
-    onclick={() => showModal = true}
-    class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold
-           transition-opacity hover:opacity-90"
-    style="background: var(--ink); color: var(--accent)"
-  >
-    + Add Member
-  </button>
+  {#if isCollector}
+    <button
+      onclick={() => showModal = true}
+      class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold
+             transition-opacity hover:opacity-90"
+      style="background: var(--ink); color: var(--accent)"
+    >
+      + Add Member
+    </button>
+  {/if}
 </div>
 
 <!-- ─── Telegram channel panel ─────────────────────────── -->
@@ -389,15 +394,19 @@
             <!-- Actions -->
             <td class="px-6 py-4">
               {#if member.status === 'ACTIVE'}
-                <button
-                  onclick={() => deactivateMember(member)}
-                  disabled={deactivating === member.id}
-                  class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors
-                         disabled:opacity-50"
-                  style="background: #fee2e2; color: #dc2626"
-                >
-                  {deactivating === member.id ? 'Deactivating...' : 'Deactivate'}
-                </button>
+                {#if isCollector}
+                  <button
+                    onclick={() => deactivateMember(member)}
+                    disabled={deactivating === member.id}
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors
+                           disabled:opacity-50"
+                    style="background: #fee2e2; color: #dc2626"
+                  >
+                    {deactivating === member.id ? 'Deactivating...' : 'Deactivate'}
+                  </button>
+                {:else}
+                  <span class="text-xs" style="color: var(--text-muted)">—</span>
+                {/if}
               {:else}
                 <span class="text-xs" style="color: var(--text-muted)">Inactive</span>
               {/if}
