@@ -1,7 +1,11 @@
 import { browser } from '$app/environment';
 
 /**
- * Manages the logged-in collector's state in localStorage.
+ * Manages the logged-in collector's state in sessionStorage.
+ *
+ * sessionStorage is scoped to the individual tab, so each tab keeps its own
+ * independent session — you can be logged in as different accounts in
+ * different tabs. A closed tab discards its session.
  *
  * Three pieces are stored:
  *   - access token  (short-lived JWT, ~8h)
@@ -54,9 +58,9 @@ export function onAuthChange(listener: Listener): () => void {
  */
 export function saveAuth(auth: AuthResponse): void {
   if (!browser) return;
-  localStorage.setItem(ACCESS_KEY, auth.accessToken);
-  localStorage.setItem(REFRESH_KEY, auth.refreshToken);
-  localStorage.setItem(COLLECTOR_KEY, JSON.stringify(auth.collector));
+  sessionStorage.setItem(ACCESS_KEY, auth.accessToken);
+  sessionStorage.setItem(REFRESH_KEY, auth.refreshToken);
+  sessionStorage.setItem(COLLECTOR_KEY, JSON.stringify(auth.collector));
   notify();
 }
 
@@ -65,24 +69,24 @@ export function saveAuth(auth: AuthResponse): void {
  */
 export function setTokens(accessToken: string, refreshToken: string): void {
   if (!browser) return;
-  localStorage.setItem(ACCESS_KEY, accessToken);
-  localStorage.setItem(REFRESH_KEY, refreshToken);
+  sessionStorage.setItem(ACCESS_KEY, accessToken);
+  sessionStorage.setItem(REFRESH_KEY, refreshToken);
   notify();
 }
 
 export function getToken(): string | null {
   if (!browser) return null;
-  return localStorage.getItem(ACCESS_KEY);
+  return sessionStorage.getItem(ACCESS_KEY);
 }
 
 export function getRefreshToken(): string | null {
   if (!browser) return null;
-  return localStorage.getItem(REFRESH_KEY);
+  return sessionStorage.getItem(REFRESH_KEY);
 }
 
 export function getCollector(): Collector | null {
   if (!browser) return null;
-  const raw = localStorage.getItem(COLLECTOR_KEY);
+  const raw = sessionStorage.getItem(COLLECTOR_KEY);
   if (!raw) return null;
 
   try {
@@ -104,8 +108,8 @@ export function isAuthenticated(): boolean {
  */
 export function clearAuth(): void {
   if (!browser) return;
-  localStorage.removeItem(ACCESS_KEY);
-  localStorage.removeItem(REFRESH_KEY);
-  localStorage.removeItem(COLLECTOR_KEY);
+  sessionStorage.removeItem(ACCESS_KEY);
+  sessionStorage.removeItem(REFRESH_KEY);
+  sessionStorage.removeItem(COLLECTOR_KEY);
   notify();
 }

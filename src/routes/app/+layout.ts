@@ -20,7 +20,7 @@ export function load() {
 }
 
 function clearStored(): void {
-  localStorage.removeItem('ajoguard_access_token');
-  localStorage.removeItem('ajoguard_refresh_token');
-  localStorage.removeItem('ajoguard_collector');
+  sessionStorage.removeItem('ajoguard_access_token');
+  sessionStorage.removeItem('ajoguard_refresh_token');
+  sessionStorage.removeItem('ajoguard_collector');
 }

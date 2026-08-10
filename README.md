@@ -147,7 +147,7 @@ AjoGuard-frontend
 Google OAuth login:
 1. Collector clicks **Continue with Google** — the app redirects to the backend's OAuth endpoint (`GET /auth/google`), or optionally uses Google Identity Services when `PUBLIC_GOOGLE_CLIENT_ID` is set.
 2. Google verifies identity and the backend redirects back to `/oauth-callback#access_token=...&refresh_token=...&collector=...`.
-3. The SPA captures the tokens from the URL hash, stores them in localStorage and lands on the dashboard.
+3. The SPA captures the tokens from the URL hash, stores them in sessionStorage (per-tab) and lands on the dashboard.
 4. A short-lived access token (~8h) is used on every request; a rotating refresh token (~30d) silently renews the session on 401s.
 
 ### `/register` — Register or join a group
@@ -193,15 +193,16 @@ Login (SPA) → Google consent → /oauth-callback#access_token=&refresh_token=&
          ↓
 Receive access token (valid 8h) + refresh token (30d, rotating)
          ↓
-Store tokens + collector in localStorage
+Store tokens + collector in sessionStorage — scoped to the tab, so each tab
+can be logged in as a different account independently
          ↓
 All protected API calls include Authorization: Bearer <access token>
          ↓
 On 401 → silently POST /auth/refresh with the refresh token → retry once
          ↓
-If the refresh fails → clear localStorage → redirect to /login
+If the refresh fails → clear sessionStorage → redirect to /login
          ↓
-On logout → clear localStorage → redirect to /login
+On logout → clear sessionStorage → redirect to /login
 ```
 
 Alternative SPA flow (preferred when `PUBLIC_GOOGLE_CLIENT_ID` is configured): the app gets a Google ID token via Google Identity Services and posts it to `POST /auth/google/login` (login) or `POST /auth/google/register` (registration).
@@ -234,7 +235,7 @@ Money fields returned by the API are **integer Naira** (with a companion `...InK
 
 ## State Management
 
-**Auth state** — managed in `src/lib/auth.ts` using localStorage. Helper functions abstract all localStorage access so they can be swapped for another storage mechanism without touching any pages.
+**Auth state** — managed in `src/lib/auth.ts` using sessionStorage (per-tab). Helper functions abstract all storage access so they can be swapped for another mechanism without touching any pages. Because sessionStorage is scoped to the individual tab, each browser tab keeps an independent session — you can be logged in as different accounts in different tabs. A closed tab discards its session.
 
 **Toast notifications** — managed in `src/lib/stores/toast.store.ts` using a plain subscriber pattern. Any page or component calls `addToast()` to show a notification. The `Toast.svelte` component subscribes and displays them.
 
